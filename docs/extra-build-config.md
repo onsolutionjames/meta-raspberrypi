@@ -74,6 +74,22 @@ To remove (or adjust) this delay set these variables in local.conf:
     BOOT_DELAY = "0"
     BOOT_DELAY_MS = "0"
 
+## Boot media
+
+The Raspberry Pi 4 board can load the boot image files from SD card and USB memory.
+By default SD card media is used as boot media.
+
+To switch the boot media from SD card to USB memory, the following variables are supported
+in local.conf: `CMDLINE_ROOT_PARTITION` and `BOOT_MEDIA`.
+The default value of `CMDLINE_ROOT_PARTITION` is "/dev/mmcblk0p2" to mount SD card. If you want to mount USB memory partition, set CMDLINE_ROOT_PARTITION to "/dev/sda2".
+`BOOT_MEDIA` allows  `mmc` and `usb`. The "mmc" is required to load an image from the SD card, following the u-boot specification. Similarly, if you want to load a boot image file from USB memory, set BOOT_MEDIA to "usb".
+
+For example, if you want to use USB boot, please define
+the following parameters in your local.conf file.
+
+    CMDLINE_ROOT_PARTITION = "/dev/sda2"
+    BOOT_MEDIA = "usb"
+
 ## Set overclocking options
 
 The Raspberry Pi can be overclocked. As of now overclocking up to the "Turbo
@@ -155,6 +171,16 @@ For further customisation the KERNEL_IMAGETYPE and KERNEL_BOOTCMD variables can
 be overridden to select the exact kernel image type (eg. zImage) and u-boot
 command (eg. bootz) to be used.
 
+To operate correctly, U-Boot requires `enable_uart=1` in `config.txt` file for
+the following boards:
+* Raspberry Pi Zero W
+* Raspberry Pi 3 32-bit
+* Raspberry Pi 3 64-bit
+* Raspberry Pi 4 32-bit
+* Raspberry Pi 4 64-bit
+It means that, for those boards, `RPI_USE_U_BOOT = "1"` is not compatible with
+`ENABLE_UART = "0"`.
+
 ## Image with Initramfs
 
 To build an initramfs image:
@@ -170,7 +196,7 @@ To build an initramfs image:
   - `INITRAMFS_IMAGE_BUNDLE = "1"`
   - `BOOT_SPACE = "1073741"`
   - `INITRAMFS_MAXSIZE = "315400"`
-  - `IMAGE_FSTYPES_pn-${INITRAMFS_IMAGE} = "${INITRAMFS_FSTYPES}"`
+  - `IMAGE_FSTYPES:pn-${INITRAMFS_IMAGE} = "${INITRAMFS_FSTYPES}"`
 
 ## Including additional files in the SD card image boot partition
 
@@ -350,6 +376,20 @@ to `1` or enabled `PiTFT` support, or otherwise want to use another pin, use
 
      GPIO_SHUTDOWN_PIN = "25"
 
+## Enable One-Wire Interface
+
+One-wire is a single-wire communication bus typically used to connect sensors
+to the RaspberryPi. The Raspberry Pi supports one-wire on any GPIO pin, but
+the default is GPIO 4. To enable the one-wire interface explicitly set it in
+`local.conf`
+
+    ENABLE_W1 = "1"
+
+Once discovery is complete you can list the devices that your Raspberry Pi has
+discovered via all 1-Wire busses check the interface with this command
+
+`ls /sys/bus/w1/devices/`
+
 ## Manual additions to config.txt
 
 The `RPI_EXTRA_CONFIG` variable can be used to manually add additional lines to
@@ -365,39 +405,43 @@ option:
         # Raspberry Pi 7\" display/touch screen \n \
         lcd_rotate=2 \n \
         '
-## Enable Raspberrypi Camera V2
+## Enable Raspberry Pi Camera Module
 
-RaspberryPi does not have the unicam device ( RaspberryPi Camera ) enabled by default.
+Raspberry Pi does not have the unicam device ( Raspberry Pi Camera ) enabled by default.
 Because this unicam device ( bcm2835-unicam ) as of now is used by libcamera opensource.
-So we have to explicitly set in local.conf.
+So we have to explicitly enable it in local.conf.
 
     RASPBERRYPI_CAMERA_V2 = "1"
 
-This will add the device tree overlays imx219 ( RaspberryPi Camera sensor V2 driver ) to config.txt.
-Also, this will enable adding Contiguous Memory Allocation value in the cmdline.txt.
+This will add the device tree overlay imx219 ( Raspberry Pi Camera Module V2 sensor driver 
+) to config.txt. Also, this will enable adding Contiguous Memory Allocation value in the 
+cmdline.txt.
 
-Ref.:
-* <https://github.com/raspberrypi/documentation/blob/master/linux/software/libcamera/README.md>
+Similarly, the Raspberry Pi Camera Module v3 also has to be explicitly enabled in local.conf.
+
+    RASPBERRYPI_CAMERA_V3 = "1"
+
+This will add the device tree overlay imx708 ( Raspberry Pi Camera Module V3 sensor driver ) 
+to config.txt.
+
+See:
+* <https://www.raspberrypi.com/documentation/computers/camera_software.html>
 * <https://www.raspberrypi.org/blog/an-open-source-camera-stack-for-raspberry-pi-using-libcamera/>
 
 ## WM8960 soundcard support
 
 Support for WM8960 based sound cards such as the WM8960 Hi-Fi Sound Card HAT for Raspberry Pi from Waveshare, and ReSpeaker 2 / 4 / 6 Mics Pi HAT from Seeed Studio, can be enabled in `local.conf`
 
-    ```conf
     MACHINE_FEATURES += "wm8960"
-    ```
 
 You may need to adjust volume and toggle switches that are off by default
 
-    ```bash
     amixer -c1 sset 'Headphone',0 80%,80%
     amixer -c1 sset 'Speaker',0 80%,80%
     amixer -c1 sset 'Left Input Mixer Boost' toggle
     amixer -c1 sset 'Left Output Mixer PCM' toggle
     amixer -c1 sset 'Right Input Mixer Boost' toggle
     amixer -c1 sset 'Right Output Mixer PCM' toggle
-    ```
 
 Audio capture on ReSpeaker 2 / 4 / 6 Mics Pi HAT from Seeed Studio is very noisy.
 
@@ -420,3 +464,34 @@ the device tree is properly tweaked. Also, mind the runtime components that
 take advantage of your RTC device. You can do that by checking what is
 included/configured in the build system based on the inclusion of `rtc` in
 `MACHINE_FEATURES`.
+
+## Raspberry Pi Distro VLC
+
+To enable Raspberry Pi Distro VLC, the `meta-openembedded/meta-multimedia` layer must be
+included in your `bblayers.conf`.
+
+VLC does not support HW accelerated video decode through MMAL on a 64-bit OS.
+
+See:
+* <https://forums.raspberrypi.com/viewtopic.php?t=275370>
+* <https://forums.raspberrypi.com/viewtopic.php?t=325218#p1946169>
+
+MMAL is not enabled by default. To enable it add
+
+    DISABLE_VC4GRAPHICS = "1"
+
+to `local.conf`. Adding `vlc` to `IMAGE_INSTALL` will then default to building the Raspberry
+Pi's Distro implementation of VLC with HW accelerated video decode through MMAL into the system
+image. It also defaults to building VLC with Raspberry PI's Distro implementation of ffmpeg. The
+oe-core implementation of ffmpeg and the meta-openembedded/meta-multimedia implementation of VLC
+can however be selected via:
+
+    PREFERRED_PROVIDER_ffmpeg = "ffmpeg"
+    PREFERRED_PROVIDER_vlc = "vlc"
+
+Usage example: Start VLC with mmal_vout plugin and without an active display server.
+
+    DISPLAYNUM=$(tvservice -l | tail -c 2)
+    MMAL_DISPLAY=$(expr $DISPLAYNUM + 1)
+    VLC_SETTINGS="-I dummy --vout=mmal_vout --mmal-resize --mmal-display hdmi-$MMAL_DISPLAY --no-dbus"
+    cvlc $VLC_SETTINGS <video/playlist>
